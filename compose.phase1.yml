@@ -1,0 +1,18 @@
+# Phase 1 only: Open WebUI without platform SSO (GPU smoke tests).
+# Production: omit this file and use --profile full with default nginx SSO.
+services:
+  nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/phase1:/etc/nginx/conf.d:ro
+      - ./certs:/etc/nginx/certs:ro
+  open-webui:
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-change-me}
+      - WEBUI_NAME=${WEBUI_NAME:-AI Platform}
+      - ENABLE_SIGNUP=${REGISTRATION_ENABLED:-false}
+      # Clear trusted-header auth so Open WebUI uses its own onboarding
+      - WEBUI_AUTH_TRUSTED_EMAIL_HEADER=
+      - WEBUI_AUTH_TRUSTED_NAME_HEADER=
+      - WEBUI_AUTH_TRUSTED_ROLE_HEADER=

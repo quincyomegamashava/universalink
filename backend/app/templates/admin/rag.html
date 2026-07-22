@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+{% block title %}RAG · Admin{% endblock %}
+{% block content %}
+<h1>RAG collections</h1>
+<div class="panel">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Qdrant collection</th><th>Active</th><th>Created</th></tr>
+    </thead>
+    <tbody>
+      {% for c in collections %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td><code>{{ c.qdrant_collection }}</code></td>
+        <td><span class="badge {% if c.is_active %}ok{% else %}err{% endif %}">{% if c.is_active %}yes{% else %}no{% endif %}</span></td>
+        <td>{{ c.created_at }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">No collections yet. Users create them via <code>/api/rag/collections</code>.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "admin/base.html" %}
+{% block title %}Settings · Admin{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<div class="panel">
+  {% for s in settings %}
+  <form class="mb-4" method="post" action="/admin/settings">
+    <strong>{{ s.key }}</strong>
+    {% if s.description %}<div class="muted">{{ s.description }}</div>{% endif %}
+    <input type="hidden" name="key" value="{{ s.key }}" />
+    <textarea name="value_json" rows="4" class="mono-input">{{ s.value | tojson }}</textarea>
+    <button class="btn mt-2" type="submit">Save</button>
+  </form>
+  {% else %}
+  <p class="muted">No settings found.</p>
+  {% endfor %}
+</div>
+{% endblock %}

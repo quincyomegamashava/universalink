@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+{% block title %}Health · Admin{% endblock %}
+{% block content %}
+<h1>Health & ops</h1>
+<div class="panel">
+  <p>Overall: <span class="badge {% if overall == 'ok' %}ok{% else %}err{% endif %}">{{ overall }}</span></p>
+  <table>
+    <thead><tr><th>Component</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for c in components %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td><span class="badge {% if c.status == 'ok' %}ok{% else %}err{% endif %}">{{ c.status }}</span></td>
+        <td>{{ c.detail or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted mt-4">
+    Prometheus scrapes <code>/metrics</code> when the monitoring profile is enabled.
+    See <code>docs/phase-8-production.md</code>.
+  </p>
+</div>
+{% endblock %}

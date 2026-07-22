@@ -1,0 +1,47 @@
+# Installed by enable-https.sh / aws-production-setup.sh when certs exist.
+# HTTP becomes ACME + health + redirect; HTTPS serves the app.
+
+upstream open_webui {
+    server open-webui:8080;
+    keepalive 32;
+}
+
+upstream backend_api {
+    server backend:8000;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+    absolute_redirect off;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location /nginx-health {
+        access_log off;
+        return 200 'ok';
+        add_header Content-Type text/plain;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name _;
+    absolute_redirect off;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    include /etc/nginx/conf.d/app-locations.inc;
+}

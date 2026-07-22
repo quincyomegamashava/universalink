@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+{% block title %}Tools · Admin{% endblock %}
+{% block content %}
+<h1>Agent tools</h1>
+<div class="panel">
+  <table>
+    <thead><tr><th>Tool</th><th>Role</th><th>Enabled</th><th></th></tr></thead>
+    <tbody>
+      {% for t in tools %}
+      <tr>
+        <td>{{ t.tool_name }}</td>
+        <td>{{ t.role }}</td>
+        <td><span class="badge {% if t.enabled %}ok{% else %}err{% endif %}">{% if t.enabled %}on{% else %}off{% endif %}</span></td>
+        <td>
+          <form method="post" action="/admin/tools/{{ t.tool_name }}/{{ t.role }}/toggle">
+            <button class="btn secondary" type="submit">Toggle</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

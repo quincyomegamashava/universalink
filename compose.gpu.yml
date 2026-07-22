@@ -1,0 +1,21 @@
+# GPU override for NVIDIA hosts (EC2 g4dn/g5, Docker Desktop + NVIDIA, etc.)
+# Usage: docker compose -f docker-compose.yml -f compose.gpu.yml up -d
+# Requires NVIDIA Container Toolkit on the host.
+# Verify: docker compose exec ollama nvidia-smi -L
+#         REQUIRE_GPU=1 bash scripts/check-models.sh
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # On GPU you can raise parallelism if VRAM allows
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-2}
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-2}

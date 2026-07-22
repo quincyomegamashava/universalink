@@ -1,0 +1,95 @@
+{% extends "portal/base.html" %}
+{% block title %}API keys · {{ app_name }}{% endblock %}
+{% block content %}
+<h1>API keys</h1>
+<p class="muted">Use these keys in Cursor, Continue, or any OpenAI-compatible client against <code>/v1</code>.</p>
+
+{% if new_key %}
+<div class="panel panel-accent mb-4">
+  <h2>New key (copy now)</h2>
+  <p class="muted">This is the only time the full key is shown.</p>
+  <div class="key-reveal">
+    <code class="mono-input inline-key" id="new-api-key">{{ new_key }}</code>
+    <button type="button" class="btn secondary" id="copy-api-key" data-copied="Copied">Copy</button>
+  </div>
+</div>
+<script>
+(function () {
+  var btn = document.getElementById("copy-api-key");
+  var el = document.getElementById("new-api-key");
+  if (!btn || !el) return;
+  var label = btn.textContent;
+  btn.addEventListener("click", function () {
+    var text = el.textContent || "";
+    var done = function () {
+      btn.textContent = btn.getAttribute("data-copied") || "Copied";
+      setTimeout(function () { btn.textContent = label; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        window.getSelection().selectAllChildren(el);
+        done();
+      });
+    } else {
+      window.getSelection().selectAllChildren(el);
+      done();
+    }
+  });
+})();
+</script>
+{% endif %}
+
+<div class="panel mb-4">
+  <h2>Create key</h2>
+  <form method="post" action="/settings/api-keys" class="row-actions">
+    <input class="mono-input inline-key" type="text" name="name" placeholder="Key name" value="Default" maxlength="120" required />
+    <button class="btn" type="submit">Create API key</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Your keys</h2>
+  {% if keys %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Prefix</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Last used</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in keys %}
+      <tr>
+        <td>{{ k.name }}</td>
+        <td><code>{{ k.key_prefix }}…</code></td>
+        <td>
+          {% if k.is_active %}<span class="badge ok">active</span>
+          {% else %}<span class="badge err">revoked</span>{% endif %}
+        </td>
+        <td class="muted">{{ k.created_at.strftime('%Y-%m-%d') if k.created_at else '—' }}</td>
+        <td class="muted">{{ k.last_used_at.strftime('%Y-%m-%d') if k.last_used_at else '—' }}</td>
+        <td>
+          {% if k.is_active %}
+          <form class="inline-form" method="post" action="/settings/api-keys/{{ k.id }}/revoke">
+            <button class="btn danger" type="submit">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No keys yet. Create one to connect IDE tools to <code>{{ app_name }}</code>.</p>
+  {% endif %}
+</div>
+
+<div class="panel mt-4">
+  <h2>Client setup</h2>
+  <p class="muted mb-0">Base URL: <code>{{ public_url }}/v1</code> · Header: <code>Authorization: Bearer sk-ai-…</code></p>
+</div>
+{% endblock %}

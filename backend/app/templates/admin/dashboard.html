@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% block title %}Dashboard · Admin{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="grid-stats">
+  <div class="stat"><div class="label">Users</div><div class="value">{{ stats.users }}</div></div>
+  <div class="stat"><div class="label">API keys</div><div class="value">{{ stats.api_keys }}</div></div>
+  <div class="stat"><div class="label">Chats</div><div class="value">{{ stats.chats }}</div></div>
+  <div class="stat"><div class="label">Requests</div><div class="value">{{ stats.requests }}</div></div>
+  <div class="stat"><div class="label">Tokens</div><div class="value">{{ stats.tokens }}</div></div>
+</div>
+<div class="panel">
+  <h2>Service health</h2>
+  <table>
+    <thead><tr><th>Component</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for c in components %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td><span class="badge {% if c.status == 'ok' %}ok{% else %}err{% endif %}">{{ c.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

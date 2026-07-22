@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}AI Platform Admin{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin/static/admin.css?v={{ css_version }}" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        AI Platform
+        <span>Admin Console · {{ user.email }}</span>
+      </div>
+      <nav class="nav">
+        <a href="/admin/" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+        <a href="/admin/users" class="{% if active == 'users' %}active{% endif %}">Users</a>
+        <a href="/admin/models" class="{% if active == 'models' %}active{% endif %}">Models</a>
+        <a href="/admin/usage" class="{% if active == 'usage' %}active{% endif %}">Usage</a>
+        <a href="/admin/rag" class="{% if active == 'rag' %}active{% endif %}">RAG</a>
+        <a href="/admin/tools" class="{% if active == 'tools' %}active{% endif %}">Agent Tools</a>
+        <a href="/admin/settings" class="{% if active == 'settings' %}active{% endif %}">Settings</a>
+        <a href="/admin/health" class="{% if active == 'health' %}active{% endif %}">Health</a>
+        <a href="/settings/api-keys">My API keys</a>
+        <a href="/home">Account home</a>
+      </nav>
+      <form class="sidebar-foot" method="post" action="/admin/logout">
+        <button class="btn secondary" type="submit">Sign out</button>
+      </form>
+    </aside>
+    <main class="content">
+      {% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+      {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

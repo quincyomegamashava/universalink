@@ -1,0 +1,40 @@
+{% extends "admin/base.html" %}
+{% block title %}Users · Admin{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<div class="panel mb-4">
+  <h2>Create user</h2>
+  <form class="row-actions" method="post" action="/admin/users">
+    <input name="name" placeholder="Name" required />
+    <input name="email" type="email" placeholder="Email" required />
+    <input name="password" type="password" placeholder="Password" required minlength="8" />
+    <select name="role">
+      <option value="user">user</option>
+      <option value="admin">admin</option>
+    </select>
+    <button class="btn" type="submit">Create</button>
+  </form>
+</div>
+<div class="panel">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.name }}</td>
+        <td>{{ u.email }}</td>
+        <td>{{ u.role }}</td>
+        <td><span class="badge {% if u.is_active %}ok{% else %}err{% endif %}">{% if u.is_active %}yes{% else %}no{% endif %}</span></td>
+        <td>
+          <form method="post" action="/admin/users/{{ u.id }}/toggle">
+            <button class="btn secondary" type="submit">{% if u.is_active %}Disable{% else %}Enable{% endif %}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

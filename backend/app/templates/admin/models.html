@@ -1,0 +1,106 @@
+{% extends "admin/base.html" %}
+{% block title %}Models · Admin{% endblock %}
+{% block content %}
+<h1>Models</h1>
+<p class="muted mt-neg mb-4">
+  Keep models loaded so the first chat response is fast. With <code>OLLAMA_KEEP_ALIVE={{ keep_alive }}</code>,
+  a warm load stays resident until you unload it or restart Ollama.
+</p>
+
+<div class="panel mb-4">
+  <div class="row-between">
+    <h2 class="mt-0 mb-0">Currently loaded</h2>
+    <div class="row-actions">
+      <form method="post" action="/admin/models/warmup-all">
+        <button class="btn" type="submit">Warm chat + embeddings</button>
+      </form>
+      <form method="post" action="/admin/models/warmup">
+        <input type="hidden" name="name" value="{{ default_chat_model }}" />
+        <button class="btn secondary" type="submit">Warm default ({{ default_chat_model }})</button>
+      </form>
+    </div>
+  </div>
+  {% if running %}
+  <table class="mt-4">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Processor</th>
+        <th>Size</th>
+        <th>Until</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in running %}
+      {% set n = m.name or m.model or 'unknown' %}
+      <tr>
+        <td><code>{{ n }}</code></td>
+        <td class="muted">{{ m.details.family if m.details and m.details.family else (m.processor or '—') }}</td>
+        <td>{% if m.size %}{{ (m.size / 1e9)|round(1) }} GB{% else %}—{% endif %}</td>
+        <td class="muted">{{ m.expires_at or m.until or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted mt-4 mb-0">No models in memory. Use Warm above or Warm on a row below.</p>
+  {% endif %}
+</div>
+
+<div class="panel mb-4">
+  <div class="row-between">
+    <h2 class="mt-0 mb-0">Local inventory</h2>
+    <form method="post" action="/admin/models/refresh">
+      <button class="btn secondary" type="submit">Refresh from Ollama</button>
+    </form>
+  </div>
+  <table class="mt-4">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Size</th>
+        <th>Modified</th>
+        <th>Flags</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in models %}
+      {% set n = m.name or m.model or 'unknown' %}
+      <tr>
+        <td><code>{{ n }}</code></td>
+        <td>{% if m.size %}{{ (m.size / 1e9)|round(1) }} GB{% else %}—{% endif %}</td>
+        <td class="muted">{{ m.modified_at or '—' }}</td>
+        <td>
+          {% if m.is_default %}<span class="badge ok">default</span>{% endif %}
+          {% if m.is_allowed %}<span class="badge ok">allowed</span>{% else %}<span class="badge err">blocked</span>{% endif %}
+        </td>
+        <td>
+          <div class="row-actions">
+            <form method="post" action="/admin/models/warmup">
+              <input type="hidden" name="name" value="{{ n }}" />
+              <button class="btn secondary" type="submit">Warm</button>
+            </form>
+            <form method="post" action="/admin/models/delete" onsubmit="return confirm('Delete {{ n }} from Ollama?')">
+              <input type="hidden" name="name" value="{{ n }}" />
+              <button class="btn danger" type="submit">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No models installed yet. Use the section below or Admin pull.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<details class="panel">
+  <summary>Install additional model</summary>
+  <p class="muted mt-2 mb-2">Only needed when a model is not already on this host.</p>
+  <form class="row-actions" method="post" action="/admin/models/pull">
+    <input name="name" value="llama3.2:3b" placeholder="ollama model tag" required />
+    <button class="btn" type="submit">Pull model</button>
+  </form>
+</details>
+{% endblock %}

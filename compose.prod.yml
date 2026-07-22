@@ -1,0 +1,8 @@
+# Production host port bindings (standard 80/443).
+# Usage: docker compose -f docker-compose.yml -f compose.prod.yml --profile full up -d
+
+services:
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"

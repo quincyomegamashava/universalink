@@ -1,0 +1,39 @@
+{% extends "portal/base.html" %}
+{% block title %}Home · {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Welcome, {{ user.name }}</h1>
+<p class="muted">Your account powers chat and developer API access.</p>
+
+<div class="grid-stats mt-4">
+  <a class="stat home-card" href="/">
+    <div class="label">Chat</div>
+    <div class="value sm">Open chat</div>
+    <p class="muted hint">Talk to local models in Open WebUI</p>
+  </a>
+  <a class="stat home-card" href="/settings/api-keys">
+    <div class="label">Developers</div>
+    <div class="value sm">API keys</div>
+    <p class="muted hint">Create keys for Cursor, Continue, and /v1</p>
+  </a>
+  <a class="stat home-card" href="/settings/password">
+    <div class="label">Account</div>
+    <div class="value sm">Password</div>
+    <p class="muted hint">Change your sign-in password</p>
+  </a>
+  {% if user.role == 'admin' %}
+  <a class="stat home-card" href="/admin/">
+    <div class="label">Ops</div>
+    <div class="value sm">Admin console</div>
+    <p class="muted hint">Users, models, RAG, agents</p>
+  </a>
+  {% endif %}
+</div>
+
+<div class="panel mt-4">
+  <h2>Where is “Settings”?</h2>
+  <p class="muted mb-0">
+    Platform API keys live here at <code>/settings/api-keys</code> — not inside the Open WebUI gear menu.
+    Chat settings (theme, etc.) stay in Open WebUI.
+  </p>
+</div>
+{% endblock %}

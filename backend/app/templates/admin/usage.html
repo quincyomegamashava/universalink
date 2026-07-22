@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% block title %}Usage · Admin{% endblock %}
+{% block content %}
+<h1>Usage</h1>
+<div class="panel">
+  <table>
+    <thead>
+      <tr><th>When</th><th>Endpoint</th><th>Model</th><th>Tokens</th><th>Latency</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.created_at }}</td>
+        <td>{{ r.endpoint }}</td>
+        <td>{{ r.model or '—' }}</td>
+        <td>{{ r.total_tokens }}</td>
+        <td>{% if r.latency_ms is not none %}{{ r.latency_ms }}ms{% else %}—{% endif %}</td>
+        <td>{{ r.status_code }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">No usage yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

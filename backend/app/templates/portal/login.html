@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in · {{ app_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin/static/admin.css?v={{ css_version }}" />
+</head>
+<body>
+  <div class="login-page portal-page">
+    <form class="login-card" method="post" action="/login">
+      <p class="eyebrow">{{ app_name }}</p>
+      <h1>Sign in</h1>
+      <p>Access chat, API keys, and — for admins — the control plane.</p>
+      {% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+      <input type="hidden" name="next" value="{{ next or '/' }}" />
+      <label class="field">
+        Email
+        <input type="email" name="email" value="{{ email or '' }}" required autocomplete="username" />
+      </label>
+      <label class="field">
+        Password
+        <input type="password" name="password" required minlength="8" autocomplete="current-password" />
+      </label>
+      <button class="btn" type="submit">Sign in</button>
+      <p class="muted portal-foot"><a href="/forgot-password">Forgot password?</a></p>
+      {% if registration_enabled %}
+      <p class="muted portal-foot">No account? <a href="/register">Create one</a></p>
+      {% else %}
+      <p class="muted portal-foot">Registration is invite-only. Ask an admin for access.</p>
+      {% endif %}
+    </form>
+  </div>
+</body>
+</html>
