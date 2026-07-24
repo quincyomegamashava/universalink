@@ -64,17 +64,131 @@ class OllamaClient:
         resp.raise_for_status()
         return resp.json().get("models", [])
 
-    async def warmup(self, model: str, *, keep_alive: str | None = None) -> dict[str, Any]:
-        """Load a model with a cheap prompt so the first user request is not cold."""
+    @staticmethod
+    def _entry_name(entry: dict[str, Any]) -> str:
+        return str(entry.get("name") or entry.get("model") or "").strip()
+
+    @staticmethod
+    def is_embedding_model(name: str) -> bool:
+        """Heuristic: embedding tags are not valid for /api/generate."""
+        n = name.lower()
+        return "embed" in n
+
+    async def resolve_installed(self, name: str) -> str | None:
+        """Return the installed tag matching ``name``, or None if not pulled."""
+        want = name.strip()
+        if not want:
+            return None
+        models = await self.list_models()
+        names = [self._entry_name(m) for m in models if self._entry_name(m)]
+        if want in names:
+            return want
+        # Accept bare name when only name:tag is installed (and vice versa)
+        if ":" not in want:
+            for n in names:
+                if n == f"{want}:latest" or n.startswith(f"{want}:"):
+                    return n
+        else:
+            base = want.split(":", 1)[0]
+            for n in names:
+                if n == want or n == f"{base}:latest":
+                    return n
+        return None
+
+    async def pick_chat_model(self, preferred: str | None = None) -> str | None:
+        """Preferred chat model if installed, else first non-embedding local model."""
         settings = get_settings()
-        payload: dict[str, Any] = {
-            "model": model,
+        candidate = (preferred or settings.default_chat_model or "").strip()
+        resolved = await self.resolve_installed(candidate) if candidate else None
+        if resolved and not self.is_embedding_model(resolved):
+            return resolved
+        for entry in await self.list_models():
+            name = self._entry_name(entry)
+            if name and not self.is_embedding_model(name):
+                return name
+        return None
+
+    def _ollama_error_detail(self, resp: httpx.Response) -> str:
+        try:
+            data = resp.json()
+            err = data.get("error") if isinstance(data, dict) else None
+            if err:
+                return str(err)
+        except Exception:  # noqa: BLE001
+            pass
+        text = (resp.text or "").strip()
+        return text[:300] if text else resp.reason_phrase
+
+    def _normalize_keep_alive(self, value: str | int | float | None) -> str | int:
+        """Ollama accepts a duration string (``5m``) or a numeric seconds value.
+
+        The string ``\"-1\"`` is invalid (missing unit). Forever must be the
+        JSON number ``-1``.
+        """
+        if value is None:
+            value = get_settings().ollama_keep_alive
+        if isinstance(value, bool):
+            return str(value)
+        if isinstance(value, (int, float)):
+            return int(value)
+        text = str(value).strip()
+        if not text:
+            return -1
+        # Pure integer (including negatives) → send as number
+        try:
+            if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
+                return int(text)
+        except ValueError:
+            pass
+        return text
+
+    async def warmup(
+        self,
+        model: str,
+        *,
+        keep_alive: str | int | None = None,
+        embedding: bool | None = None,
+    ) -> dict[str, Any]:
+        """Load a model cheaply so the first user request is not cold.
+
+        Chat models use ``/api/generate``. Embedding models use ``/api/embeddings``
+        (generate returns 400 for embed-only weights).
+        """
+        resolved = await self.resolve_installed(model)
+        if not resolved:
+            raise ValueError(
+                f"Model '{model}' is not installed on Ollama. "
+                "Pull it first, or use Warm on a row in Local inventory."
+            )
+
+        use_embed = self.is_embedding_model(resolved) if embedding is None else embedding
+        alive = self._normalize_keep_alive(keep_alive)
+
+        if use_embed:
+            payload: dict[str, Any] = {
+                "model": resolved,
+                "prompt": "ok",
+                "keep_alive": alive,
+            }
+            resp = await self._get_client().post("/api/embeddings", json=payload)
+            if resp.is_error:
+                raise ValueError(
+                    f"Failed to warm embedding model '{resolved}': "
+                    f"{self._ollama_error_detail(resp)}"
+                )
+            return resp.json()
+
+        payload = {
+            "model": resolved,
             "prompt": "ok",
             "stream": False,
-            "keep_alive": keep_alive if keep_alive is not None else settings.ollama_keep_alive,
+            "keep_alive": alive,
         }
         resp = await self._get_client().post("/api/generate", json=payload)
-        resp.raise_for_status()
+        if resp.is_error:
+            raise ValueError(
+                f"Failed to warm '{resolved}': {self._ollama_error_detail(resp)}"
+            )
         return resp.json()
 
     async def chat(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Any
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -268,6 +269,12 @@ async def models_refresh(request: Request, db: Annotated[AsyncSession, Depends(g
     return RedirectResponse(url="/admin/models?flash=Synced+local+models", status_code=303)
 
 
+def _models_redirect(*, error: str | None = None, flash: str | None = None) -> RedirectResponse:
+    if error:
+        return RedirectResponse(url=f"/admin/models?error={quote(error, safe='')}", status_code=303)
+    return RedirectResponse(url=f"/admin/models?flash={quote(flash or 'Done', safe='')}", status_code=303)
+
+
 @router.post("/models/warmup")
 async def models_warmup(
     request: Request,
@@ -277,22 +284,39 @@ async def models_warmup(
     admin = await _user_from_cookie(request, db)
     if admin is None:
         return _redirect_login()
+    settings = get_settings()
+    requested = name.strip()
+    target = requested
+    note = ""
     try:
-        await ollama_client.warmup(name.strip())
+        # "Warm default" should not 400 when DEFAULT_CHAT_MODEL is not pulled yet
+        if requested == settings.default_chat_model:
+            picked = await ollama_client.pick_chat_model(requested)
+            if not picked:
+                return _models_redirect(
+                    error=(
+                        f"No chat model installed. Pull '{settings.default_chat_model}' "
+                        "or another chat model first."
+                    )
+                )
+            if picked != requested:
+                note = f" (default '{requested}' missing; used '{picked}')"
+            target = picked
+        await ollama_client.warmup(target)
         db.add(
             AdminAuditLog(
                 admin_user_id=admin.id,
                 action="model.warmup",
                 target_type="model",
-                target_id=name.strip(),
-                detail={},
+                target_id=target,
+                detail={"requested": requested},
                 ip_address=request.client.host if request.client else None,
             )
         )
         await db.commit()
     except Exception as exc:  # noqa: BLE001
-        return RedirectResponse(url=f"/admin/models?error={exc}", status_code=303)
-    return RedirectResponse(url=f"/admin/models?flash=Warmed+{name.strip()}", status_code=303)
+        return _models_redirect(error=str(exc))
+    return _models_redirect(flash=f"Warmed {target}{note}")
 
 
 @router.post("/models/warmup-all")
@@ -302,26 +326,47 @@ async def models_warmup_all(request: Request, db: Annotated[AsyncSession, Depend
         return _redirect_login()
     settings = get_settings()
     warmed: list[str] = []
+    notes: list[str] = []
     try:
-        for model in (settings.default_chat_model, settings.embedding_model):
-            if not model or model in warmed:
-                continue
-            await ollama_client.warmup(model)
-            warmed.append(model)
+        chat = await ollama_client.pick_chat_model(settings.default_chat_model)
+        if not chat:
+            return _models_redirect(
+                error=(
+                    f"No chat model installed. Pull '{settings.default_chat_model}' "
+                    "(or any chat model) first."
+                )
+            )
+        if chat != settings.default_chat_model:
+            notes.append(f"default '{settings.default_chat_model}' missing; warmed '{chat}'")
+        await ollama_client.warmup(chat, embedding=False)
+        warmed.append(chat)
+
+        embed = (settings.embedding_model or "").strip()
+        if embed:
+            embed_resolved = await ollama_client.resolve_installed(embed)
+            if embed_resolved:
+                await ollama_client.warmup(embed_resolved, embedding=True)
+                warmed.append(embed_resolved)
+            else:
+                notes.append(f"skipped embeddings '{embed}' (not installed)")
+
         db.add(
             AdminAuditLog(
                 admin_user_id=admin.id,
                 action="model.warmup",
                 target_type="model",
                 target_id="chat+embeddings",
-                detail={"models": warmed},
+                detail={"models": warmed, "notes": notes},
                 ip_address=request.client.host if request.client else None,
             )
         )
         await db.commit()
     except Exception as exc:  # noqa: BLE001
-        return RedirectResponse(url=f"/admin/models?error={exc}", status_code=303)
-    return RedirectResponse(url="/admin/models?flash=Warmed+chat+and+embeddings", status_code=303)
+        return _models_redirect(error=str(exc))
+    flash = "Warmed " + ", ".join(warmed)
+    if notes:
+        flash += " — " + "; ".join(notes)
+    return _models_redirect(flash=flash)
 
 
 @router.post("/models/pull")

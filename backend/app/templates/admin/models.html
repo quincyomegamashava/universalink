@@ -5,6 +5,8 @@
 <p class="muted mt-neg mb-4">
   Keep models loaded so the first chat response is fast. With <code>OLLAMA_KEEP_ALIVE={{ keep_alive }}</code>,
   a warm load stays resident until you unload it or restart Ollama.
+  Warm only works for models in Local inventory; missing defaults fall back to an installed chat model.
+  Embeddings (<code>{{ embedding_model }}</code>) are warmed via the embeddings API when installed.
 </p>
 
 <div class="panel mb-4">
