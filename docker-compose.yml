@@ -32,8 +32,13 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      backend:
+        condition: service_healthy
+        required: false
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      # Default: talk to Ollama directly. For virtual "auto" model in chat, set:
+      # OPEN_WEBUI_OLLAMA_URL=http://backend:8000/ollama  (requires --profile full)
+      - OLLAMA_BASE_URL=${OPEN_WEBUI_OLLAMA_URL:-http://ollama:11434}
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-change-me}
       - WEBUI_NAME=${WEBUI_NAME:-AI Platform}
       # Platform owns signup/login; Open WebUI trusts NGINX identity headers only
@@ -44,6 +49,8 @@ services:
       - WEBUI_AUTH_TRUSTED_ROLE_HEADER=X-User-Role
       # Show all Ollama models to every signed-in user (no per-model ACL gating)
       - BYPASS_MODEL_ACCESS_CONTROL=true
+      # Prefer auto when present (users can still pick a specific model)
+      - DEFAULT_MODELS=${OPEN_WEBUI_DEFAULT_MODELS:-auto}
     volumes:
       - open_webui_data:/app/backend/data
     networks:

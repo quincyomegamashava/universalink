@@ -11,6 +11,10 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Virtual model id advertised by /v1/models and the Ollama bridge for Open WebUI.
+AUTO_MODEL_ID = "auto"
+AUTO_MODEL_ALIASES = frozenset({AUTO_MODEL_ID, f"{AUTO_MODEL_ID}:latest"})
+
 
 class OllamaClient:
     """Thin async client for Ollama REST API. Never expose this service publicly."""
@@ -107,6 +111,45 @@ class OllamaClient:
             if name and not self.is_embedding_model(name):
                 return name
         return None
+
+    async def pick_fastest_chat_model(self) -> str | None:
+        """Prefer an already-loaded chat model, else the smallest installed chat model.
+
+        Used by the virtual ``auto`` model id for low-latency replies.
+        """
+        try:
+            running = await self.list_running()
+        except Exception:  # noqa: BLE001
+            running = []
+        for entry in running:
+            name = self._entry_name(entry)
+            if name and not self.is_embedding_model(name):
+                return name
+
+        chat_entries: list[tuple[int, str]] = []
+        for entry in await self.list_models():
+            name = self._entry_name(entry)
+            if not name or self.is_embedding_model(name):
+                continue
+            size = int(entry.get("size") or 0)
+            chat_entries.append((size, name))
+        if not chat_entries:
+            return await self.pick_chat_model()
+        chat_entries.sort(key=lambda item: (item[0], item[1]))
+        return chat_entries[0][1]
+
+    async def resolve_chat_model(self, requested: str | None) -> str:
+        """Map ``auto`` (or empty) to a concrete installed chat model."""
+        name = (requested or "").strip()
+        if not name or name.lower() in AUTO_MODEL_ALIASES:
+            picked = await self.pick_fastest_chat_model()
+            if not picked:
+                raise ValueError(
+                    "No chat model available for 'auto'. Pull a model first "
+                    "(e.g. llama3.2:1b)."
+                )
+            return picked
+        return name
 
     def _ollama_error_detail(self, resp: httpx.Response) -> str:
         try:

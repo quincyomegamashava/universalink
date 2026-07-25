@@ -6,19 +6,26 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import DbSession, enforce_rate_limit, get_api_key_user
 from app.core.config import get_settings
 from app.models import ApiKey, DocumentCollection, UsageRecord, User
 from app.schemas import ChatCompletionRequest, CompletionRequest, EmbeddingRequest
-from app.services.ollama import ollama_client
+from app.services.ollama import AUTO_MODEL_ID, ollama_client
 from app.services.rag import rag_service
-from sqlalchemy import select
 
 router = APIRouter(prefix="/v1", tags=["openai-compatible"])
+
+
+async def _resolve_model(requested: str) -> str:
+    try:
+        return await ollama_client.resolve_chat_model(requested)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 async def _log_usage(
@@ -61,15 +68,27 @@ async def list_models(
     user, api_key = auth
     await enforce_rate_limit(request, f"key:{api_key.id}", api_key.rate_limit_per_minute)
     models = await ollama_client.list_models()
-    data = [
+    now = int(time.time())
+    data: list[dict[str, Any]] = [
         {
-            "id": m.get("name") or m.get("model"),
+            "id": AUTO_MODEL_ID,
             "object": "model",
-            "created": int(time.time()),
-            "owned_by": "ollama",
+            "created": now,
+            "owned_by": "ai-platform",
         }
-        for m in models
     ]
+    for m in models:
+        mid = m.get("name") or m.get("model")
+        if not mid:
+            continue
+        data.append(
+            {
+                "id": mid,
+                "object": "model",
+                "created": now,
+                "owned_by": "ollama",
+            }
+        )
     await _log_usage(db, user, api_key, "/v1/models", None, 0, 0, 0)
     return {"object": "list", "data": data}
 
@@ -84,6 +103,7 @@ async def chat_completions(
     user, api_key = auth
     await enforce_rate_limit(request, f"key:{api_key.id}", api_key.rate_limit_per_minute)
     start = time.perf_counter()
+    model = await _resolve_model(body.model)
 
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     if body.collection_id is not None:
@@ -104,7 +124,7 @@ async def chat_completions(
         async def event_stream() -> AsyncIterator[bytes]:
             completion_text = ""
             chunk_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
-            stream = await ollama_client.chat(body.model, messages, stream=True, options=options or None)
+            stream = await ollama_client.chat(model, messages, stream=True, options=options or None)
             assert isinstance(stream, AsyncIterator)
             async for part in stream:
                 msg = part.get("message") or {}
@@ -114,7 +134,7 @@ async def chat_completions(
                     "id": chunk_id,
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
-                    "model": body.model,
+                    "model": model,
                     "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}],
                 }
                 yield f"data: {json.dumps(payload)}\n\n".encode()
@@ -123,7 +143,7 @@ async def chat_completions(
                         "id": chunk_id,
                         "object": "chat.completion.chunk",
                         "created": int(time.time()),
-                        "model": body.model,
+                        "model": model,
                         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
                     }
                     yield f"data: {json.dumps(done_payload)}\n\n".encode()
@@ -135,7 +155,7 @@ async def chat_completions(
                 user,
                 api_key,
                 "/v1/chat/completions",
-                body.model,
+                model,
                 prompt_tokens,
                 _estimate_tokens(completion_text),
                 latency,
@@ -143,18 +163,18 @@ async def chat_completions(
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-    result = await ollama_client.chat(body.model, messages, stream=False, options=options or None)
+    result = await ollama_client.chat(model, messages, stream=False, options=options or None)
     assert isinstance(result, dict)
     content = (result.get("message") or {}).get("content", "")
     latency = int((time.perf_counter() - start) * 1000)
     prompt_tokens = int(result.get("prompt_eval_count") or _estimate_tokens("".join(m["content"] for m in messages)))
     completion_tokens = int(result.get("eval_count") or _estimate_tokens(content))
-    await _log_usage(db, user, api_key, "/v1/chat/completions", body.model, prompt_tokens, completion_tokens, latency)
+    await _log_usage(db, user, api_key, "/v1/chat/completions", model, prompt_tokens, completion_tokens, latency)
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
         "object": "chat.completion",
         "created": int(time.time()),
-        "model": body.model,
+        "model": model,
         "choices": [
             {
                 "index": 0,
@@ -180,6 +200,7 @@ async def completions(
     user, api_key = auth
     await enforce_rate_limit(request, f"key:{api_key.id}", api_key.rate_limit_per_minute)
     start = time.perf_counter()
+    model = await _resolve_model(body.model)
     options: dict[str, Any] = {}
     if body.temperature is not None:
         options["temperature"] = body.temperature
@@ -189,7 +210,7 @@ async def completions(
     if body.stream:
         async def event_stream() -> AsyncIterator[bytes]:
             text = ""
-            stream = await ollama_client.generate(body.model, body.prompt, stream=True, options=options or None)
+            stream = await ollama_client.generate(model, body.prompt, stream=True, options=options or None)
             assert isinstance(stream, AsyncIterator)
             completion_id = f"cmpl-{uuid.uuid4().hex[:24]}"
             async for part in stream:
@@ -199,7 +220,7 @@ async def completions(
                     "id": completion_id,
                     "object": "text_completion",
                     "created": int(time.time()),
-                    "model": body.model,
+                    "model": model,
                     "choices": [{"text": delta, "index": 0, "finish_reason": None}],
                 }
                 yield f"data: {json.dumps(payload)}\n\n".encode()
@@ -211,7 +232,7 @@ async def completions(
                 user,
                 api_key,
                 "/v1/completions",
-                body.model,
+                model,
                 _estimate_tokens(body.prompt),
                 _estimate_tokens(text),
                 latency,
@@ -219,18 +240,18 @@ async def completions(
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-    result = await ollama_client.generate(body.model, body.prompt, stream=False, options=options or None)
+    result = await ollama_client.generate(model, body.prompt, stream=False, options=options or None)
     assert isinstance(result, dict)
     text = result.get("response", "")
     latency = int((time.perf_counter() - start) * 1000)
     prompt_tokens = int(result.get("prompt_eval_count") or _estimate_tokens(body.prompt))
     completion_tokens = int(result.get("eval_count") or _estimate_tokens(text))
-    await _log_usage(db, user, api_key, "/v1/completions", body.model, prompt_tokens, completion_tokens, latency)
+    await _log_usage(db, user, api_key, "/v1/completions", model, prompt_tokens, completion_tokens, latency)
     return {
         "id": f"cmpl-{uuid.uuid4().hex[:24]}",
         "object": "text_completion",
         "created": int(time.time()),
-        "model": body.model,
+        "model": model,
         "choices": [{"text": text, "index": 0, "finish_reason": "stop"}],
         "usage": {
             "prompt_tokens": prompt_tokens,

@@ -95,11 +95,65 @@ async def test_warmup_missing_model_raises_clear_error():
 
 
 @pytest.mark.asyncio
-async def test_pick_chat_model_falls_back_when_default_missing():
+async def test_pick_fastest_prefers_loaded_then_smallest():
     client = OllamaClient(base_url="http://ollama:11434")
     http = AsyncMock()
-    http.get = AsyncMock(return_value=_tags_resp(["nomic-embed-text", "llama3.2:3b"]))
+    ps = MagicMock()
+    ps.raise_for_status = MagicMock()
+    ps.json.return_value = {"models": [{"name": "mistral:7b"}]}
+    tags = _tags_resp(["llama3.2:1b", "mistral:7b"])
+    # enrich sizes for smallest fallback path (not used when running is set)
+    tags.json.return_value = {
+        "models": [
+            {"name": "llama3.2:1b", "size": 1_300_000_000},
+            {"name": "mistral:7b", "size": 4_400_000_000},
+        ]
+    }
+    http.get = AsyncMock(side_effect=[ps, tags])
     http.is_closed = False
     client._client = http
-    picked = await client.pick_chat_model("llama3.2:1b")
-    assert picked == "llama3.2:3b"
+    assert await client.pick_fastest_chat_model() == "mistral:7b"
+
+
+@pytest.mark.asyncio
+async def test_pick_fastest_picks_smallest_when_none_loaded():
+    client = OllamaClient(base_url="http://ollama:11434")
+    http = AsyncMock()
+    ps = MagicMock()
+    ps.raise_for_status = MagicMock()
+    ps.json.return_value = {"models": []}
+    tags = MagicMock()
+    tags.raise_for_status = MagicMock()
+    tags.json.return_value = {
+        "models": [
+            {"name": "nomic-embed-text", "size": 300_000_000},
+            {"name": "mistral:7b", "size": 4_400_000_000},
+            {"name": "llama3.2:1b", "size": 1_300_000_000},
+        ]
+    }
+    http.get = AsyncMock(side_effect=[ps, tags])
+    http.is_closed = False
+    client._client = http
+    assert await client.pick_fastest_chat_model() == "llama3.2:1b"
+
+
+@pytest.mark.asyncio
+async def test_resolve_chat_model_auto():
+    client = OllamaClient(base_url="http://ollama:11434")
+    http = AsyncMock()
+    ps = MagicMock()
+    ps.raise_for_status = MagicMock()
+    ps.json.return_value = {"models": []}
+    tags = MagicMock()
+    tags.raise_for_status = MagicMock()
+    tags.json.return_value = {"models": [{"name": "llama3.2:3b", "size": 2_000_000_000}]}
+    http.get = AsyncMock(side_effect=[ps, tags])
+    http.is_closed = False
+    client._client = http
+    assert await client.resolve_chat_model("auto") == "llama3.2:3b"
+
+
+@pytest.mark.asyncio
+async def test_resolve_chat_model_passthrough():
+    client = OllamaClient(base_url="http://ollama:11434")
+    assert await client.resolve_chat_model("mistral:7b") == "mistral:7b"

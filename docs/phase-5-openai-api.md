@@ -14,6 +14,8 @@ All require `Authorization: Bearer sk-ai-...`
 Base URL: `http://<host>:8088/v1`  
 API key: create at `/settings/api-keys` after signing in (or `POST /api/api-keys` with a JWT).
 
+Virtual model **`auto`**: picks an already-loaded chat model if any, otherwise the smallest installed chat model (skips embeddings). Listed in `GET /v1/models`.
+
 **Always enable streaming** in the client so tokens appear as they generate. Non-stream waits for the full completion.
 
 Default model on CPU: `llama3.2:1b` (see [performance.md](performance.md)).

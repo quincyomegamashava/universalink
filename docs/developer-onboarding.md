@@ -48,8 +48,18 @@ Default admin: `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`.
 
 - Base URL: `http://<host>:8088/v1`
 - API key: from Settings → API keys
-- Model id: prefer `llama3.2:1b` on CPU, `llama3.2:3b` on GPU (`GET /v1/models`)
+- Model id: use `auto` (picks fastest available: already-loaded, else smallest chat model), or an explicit tag from `GET /v1/models`
 - **Enable streaming** in the provider settings so responses feel live
+
+Chat UI (Open WebUI): with `OPEN_WEBUI_OLLAMA_URL=http://backend:8000/ollama` and `--profile full`, the model list includes **`auto`**.
+
+If `auto` is missing after setting the env var, Open WebUI likely still has the old Ollama URL saved in its DB. Fix with:
+
+```bash
+docker cp scripts/fix-webui-ollama-bridge-url.py ai-open-webui:/tmp/fix-webui-ollama-bridge-url.py
+docker compose exec open-webui python /tmp/fix-webui-ollama-bridge-url.py
+docker compose restart open-webui
+```
 
 Speed tips: [performance.md](performance.md).
 

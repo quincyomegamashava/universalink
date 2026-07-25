@@ -9,7 +9,19 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
 from app import __version__
-from app.api.routers import admin, admin_ui, agents, auth, chats, openai_compat, portal, portal_settings, rag, users
+from app.api.routers import (
+    admin,
+    admin_ui,
+    agents,
+    auth,
+    chats,
+    ollama_bridge,
+    openai_compat,
+    portal,
+    portal_settings,
+    rag,
+    users,
+)
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.db.session import AsyncSessionLocal, Base, engine
@@ -68,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router)
     app.include_router(admin_ui.router)
     app.include_router(openai_compat.router)
+    app.include_router(ollama_bridge.router)
     app.include_router(rag.router)
     app.include_router(agents.router)
 
